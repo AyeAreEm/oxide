@@ -1,9 +1,10 @@
 proc helloworld() {
-    print("hello world");
+    string h = "hello world";
+    print("{}", h);
 }
 
 proc main() {
-    let x = 3 + 2 * (10 * 2);
-    print("{}", x);
+    int x = 3 + 4;
+    print("{}", x-1);
     helloworld();
 }
