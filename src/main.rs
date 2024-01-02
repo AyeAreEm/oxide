@@ -1,9 +1,12 @@
 use std::env;
 use std::fs;
 use parser::parser;
-mod parser;
+use generator::generator;
 
-// add booleans, comments, if statements, while / for loops, function parameters, maybe more ints, return values, arrays & vectors
+mod parser;
+mod generator;
+
+// add booleans, comments, if statements, while / for loops, function parameters, maybe more ints, return values, arrays & vectors, mut
 #[derive(Debug, Clone)]
 enum Token {
     Plus((String, String)),
@@ -28,11 +31,12 @@ enum Token {
     Function((String, String)),
     FuncName((String, String)),
     Print((String, String)),
+    Parameters((String, String)),
     // WhiteSpace((String, String)),
     NewLine((String, String)),
 }
 
-fn handle_ending_value(tokens: &mut Vec<Token>, current_token: &mut String, making_string: &mut i8) {
+fn handle_ending_value(tokens: &mut Vec<Token>, current_token: &mut String, making_string: &mut i8, making_params: &mut i8) {
     if current_token.is_empty() {
         return;
     }
@@ -40,31 +44,37 @@ fn handle_ending_value(tokens: &mut Vec<Token>, current_token: &mut String, maki
     let mut named = Vec::new();
     for token in tokens.clone() {
         match token {
-            Token::VarName(name) | Token::FuncName(name)=> named.push(name),
+            Token::VarName(name) | Token::FuncName(name) => named.push(name),
             _ => (),
         }
     }
 
     let new_token_result = current_token.parse::<i32>();
     match new_token_result {
-        Ok(new_token) => tokens.push(Token::Number((String::from("NUMBER"), new_token))),
+        Ok(new_token) => {
+            // do logic to check if the number is a parameter, if so Token::Parameter, else Token::Number
+            tokens.push(Token::Number((String::from("NUMBER"), new_token)));
+        },
         Err(_) => {
-            if current_token == "=" {
+            if current_token == "=" && *making_params < 1 {
                 tokens.push(Token::EqualsTo((String::from("EQUALSTO"), current_token.to_string())))
-            } else if current_token == "==" {
+            } else if current_token == "==" && *making_params < 1 {
                 tokens.push(Token::Equality((String::from("EQUALITY"), current_token.to_string())))
-            } else if current_token == "int" {
+            } else if current_token == "int" && *making_params < 1 {
                 tokens.push(Token::LetInt((String::from("LETINT"), current_token.to_string())))
-            } else if current_token == "string" {
+            } else if current_token == "string" && *making_params < 1 {
                 tokens.push(Token::LetString((String::from("LETSTRING"), current_token.to_string())))
-            } else if current_token == "proc" {
+            } else if current_token == "proc" && *making_params < 1 {
                 tokens.push(Token::Function((String::from("FUNCTION"), current_token.to_string())))
-            } else if current_token == "print" {
+            } else if current_token == "print" && *making_params < 1 {
                 tokens.push(Token::Print((String::from("PRINT"), current_token.to_string())))
             } else {
                 match tokens.last().unwrap() {
                     Token::LetInt(_) | Token::LetString(_) => tokens.push(Token::VarName((String::from("VARNAME"), current_token.to_string()))),
                     Token::Function(_) => tokens.push(Token::FuncName((String::from("FUNCNAME"), current_token.to_string()))),
+                    Token::LParen(_) => {
+                        tokens.push(Token::Parameters((String::from("Parameters"), current_token.to_string())));
+                    },
                     Token::DblQuote(_) => {
                         if *making_string == 1 {
                             tokens.push(Token::Strings((String::from("STRINGS"), current_token.to_string())));
@@ -87,7 +97,7 @@ fn handle_ending_value(tokens: &mut Vec<Token>, current_token: &mut String, maki
                         }
 
                         if !found {
-                            panic!("invalid characters: {}", current_token)
+                            panic!("invalid characters: {},  making params: {}, making string: {}, last token: {:?} tokens: {:?}", current_token, making_params, making_string, tokens.last().unwrap(), tokens);
                         }
                     },
                 }
@@ -102,61 +112,92 @@ fn tokeniser(content: String) -> Vec<Token> {
     let mut tokens = Vec::new();
     let mut current_token = String::new();
     let mut making_string: i8 = 0;
+    let mut making_params: i8 = 0;
 
     // fix singel quotes
     for c in content.chars() {
-        if c.is_digit(10) || c.is_alphabetic() || (making_string > 0 && c != '"') {
+        if c.is_digit(10) || c.is_alphabetic() || (making_string > 0 && (c != '"' || c == ' ')) || (making_params >= 1 && c != ')' && c != '(') || (making_params >= 1 && c == ' ') {
             current_token.push(c);
         } else if c == '+' {
-            handle_ending_value(&mut tokens, &mut current_token, &mut making_string);
+            handle_ending_value(&mut tokens, &mut current_token, &mut making_string, &mut making_params);
             tokens.push(Token::Plus((String::from("PLUS"), String::from(c))));
         } else if c == '-' {
-            handle_ending_value(&mut tokens, &mut current_token, &mut making_string);
+            handle_ending_value(&mut tokens, &mut current_token, &mut making_string, &mut making_params);
             tokens.push(Token::Minus((String::from("MINUS"), String::from(c))));
         } else if c == '*' {
-            handle_ending_value(&mut tokens, &mut current_token, &mut making_string);
+            handle_ending_value(&mut tokens, &mut current_token, &mut making_string, &mut making_params);
             tokens.push(Token::Multiply((String::from("MULTIPLY"), String::from(c))));
         } else if c == '/' {
-            handle_ending_value(&mut tokens, &mut current_token, &mut making_string);
+            handle_ending_value(&mut tokens, &mut current_token, &mut making_string, &mut making_params);
             tokens.push(Token::Divide((String::from("DIVIDE"), String::from(c))));
         } else if c == '"' {
             making_string += 1;
-            handle_ending_value(&mut tokens, &mut current_token, &mut making_string);
+            handle_ending_value(&mut tokens, &mut current_token, &mut making_string, &mut making_params);
             tokens.push(Token::DblQuote((String::from("DBLQUOTE"), String::from(c))));
         } else if c == '\'' {
-            handle_ending_value(&mut tokens, &mut current_token, &mut making_string);
+            handle_ending_value(&mut tokens, &mut current_token, &mut making_string, &mut making_params);
             tokens.push(Token::SglQuote((String::from("SGLQUOTE"), String::from(c))));
         } else if c == '(' {
-            handle_ending_value(&mut tokens, &mut current_token, &mut making_string);
-            tokens.push(Token::LParen((String::from("LPAREN"), String::from(c))));
+            match making_params {
+                0 => {
+                    handle_ending_value(&mut tokens, &mut current_token, &mut making_string, &mut making_params);
+                    making_params += 1;
+                    tokens.push(Token::LParen((String::from("LPAREN"), String::from(c))));
+                },
+                _ => {
+                    making_params += 1;
+                    current_token.push(c);
+                }
+
+            }
         } else if c == ')' {
-            handle_ending_value(&mut tokens, &mut current_token, &mut making_string);
-            tokens.push(Token::RParen((String::from("RPAREN"), String::from(c))));
+            match making_params {
+                0 => {
+                    handle_ending_value(&mut tokens, &mut current_token, &mut making_string, &mut making_params);
+                    tokens.push(Token::RParen((String::from("RPAREN"), String::from(c))));
+                },
+                1 => {
+                    handle_ending_value(&mut tokens, &mut current_token, &mut making_string, &mut making_params);
+                    making_params -= 1;
+                    tokens.push(Token::RParen((String::from("RPAREN"), String::from(c))));
+                },
+                _ => {
+                    current_token.push(c);
+                    making_params -= 1;
+                },
+                
+            }
         } else if c == '{' {
-            handle_ending_value(&mut tokens, &mut current_token, &mut making_string);
+            handle_ending_value(&mut tokens, &mut current_token, &mut making_string, &mut making_params);
             tokens.push(Token::LSquirly((String::from("LSQUIRLY"), String::from(c))));
         } else if c == '}' {
-            handle_ending_value(&mut tokens, &mut current_token, &mut making_string);
+            handle_ending_value(&mut tokens, &mut current_token, &mut making_string, &mut making_params);
             tokens.push(Token::RSquirly((String::from("RSQUIRLY"), String::from(c))));
         } else if c == ',' {
-            handle_ending_value(&mut tokens, &mut current_token, &mut making_string);
+            handle_ending_value(&mut tokens, &mut current_token, &mut making_string, &mut making_params);
             tokens.push(Token::Comma((String::from("COMMA"), String::from(c))));
         } else if c == '\n' {
-            handle_ending_value(&mut tokens, &mut current_token, &mut making_string);
+            handle_ending_value(&mut tokens, &mut current_token, &mut making_string, &mut making_params);
             tokens.push(Token::NewLine((String::from("NEWLINE"), String::from(c))));
         } else if c == ' ' {
-            handle_ending_value(&mut tokens, &mut current_token, &mut making_string);
+            match making_params {
+                0 => {
+                    handle_ending_value(&mut tokens, &mut current_token, &mut making_string, &mut making_params);
+                },
+                _ => current_token.push(c),
+            }
             // tokens.push(Token::WhiteSpace((String::from("WHITESPACE"), String::from(c))));
         } else if c == ';' {
-            handle_ending_value(&mut tokens, &mut current_token, &mut making_string);
+            handle_ending_value(&mut tokens, &mut current_token, &mut making_string, &mut making_params);
             tokens.push(Token::Semicolon((String::from("SEMICOLON"), String::from(c))))
         } else if c == '=' {
             current_token.push(c);
         } else {
             current_token.push(c);
         }
-    };
+    }
 
+    println!("buffer: {}, making params: {}, making strings: {}", current_token, making_params, making_string);
     return tokens;
 }
 
@@ -170,16 +211,22 @@ fn main() {
     };
 
     let tokenised = tokeniser(contents);
+
+    for token in &tokenised {
+        println!("{:?}", token);
+    }
+
     let parsed = parser(tokenised);
 
-    for parse in parsed {
+    println!("\n");
+    for parse in &parsed {
         println!("{:?}", parse);
     }
 
-    // let generated = parser::parser(tokenised);
+    let generated = generator(parsed);
 
-    // match fs::write("./gen.rs", generated) {
-    //     Ok(_) => println!("produced gen.rs"),
-    //     Err(_) => panic!("error writing to file"),
-    // }
+    match fs::write("./gen.rs", generated) {
+        Ok(_) => println!("produced gen.rs"),
+        Err(_) => panic!("error writing to file"),
+    }
 }

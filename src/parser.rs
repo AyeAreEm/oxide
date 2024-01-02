@@ -4,27 +4,28 @@ use crate::Token;
 pub enum Parsed {
     VariableDeclare(VariableDeclare),
     FunctionDeclare(FunctionDeclare),
-    FunctionCall(String),
-    Print(Print),
+    FunctionCall(FunctionCall),
+    Print(String),
+    RSquirly(String),
 }
 
 #[derive(Debug)]
-struct VariableDeclare {
-    type_class: String,
-    name: String,
-    value: String,
+pub struct VariableDeclare {
+    pub type_class: String,
+    pub name: String,
+    pub value: String,
 }
 
 #[derive(Debug)]
-struct FunctionDeclare {
-    name: String,
-    parameters: String,
+pub struct FunctionDeclare {
+    pub name: String,
+    pub parameters: String, 
 }
 
 #[derive(Debug)]
-struct Print {
-    body: String,
-    parameters: String,
+pub struct FunctionCall {
+    pub name: String,
+    pub parameters: String, 
 }
 
 pub fn parser(tokens: Vec<Token>) -> Vec<Parsed> {
@@ -59,7 +60,7 @@ pub fn parser(tokens: Vec<Token>) -> Vec<Parsed> {
                 Token::SglQuote(_) => (),
                 Token::DblQuote(_) => (),
                 Token::LSquirly(_) => (),
-                Token::RSquirly(_) => (),
+                Token::RSquirly(_) => parsed_lines.push(Parsed::RSquirly(String::from("}"))),
                 Token::EqualsTo(_) => (),
                 Token::Equality(_) => (),
                 Token::Number(_) => (),
@@ -82,7 +83,8 @@ pub fn parser(tokens: Vec<Token>) -> Vec<Parsed> {
                                 }
                             }
                             Token::Divide((_, expr)) | Token::Minus((_, expr)) |
-                            Token::Plus((_, expr)) | Token::Multiply((_, expr)) => {
+                            Token::Plus((_, expr)) | Token::Multiply((_, expr)) |
+                            Token::LParen((_, expr)) | Token::RParen((_, expr)) => {
                                 if is_assigned && !is_semicoloned {
                                     value.push_str(&expr.to_string());
                                 }
@@ -138,12 +140,13 @@ pub fn parser(tokens: Vec<Token>) -> Vec<Parsed> {
                 Token::Comma(_) => (),
                 Token::Function(_) => {
                     let mut name = String::new();
-                    let parameters = String::new();
+                    let mut parameters = String::new();
                     let mut j = i + 1;
 
                     while j < line.len() {
                         match &line[j] {
                             Token::FuncName((_, func_name)) => name = func_name.to_owned(),
+                            Token::Parameters((_, value)) => parameters.push_str(value),
                             _ => (),
                         }
 
@@ -158,6 +161,8 @@ pub fn parser(tokens: Vec<Token>) -> Vec<Parsed> {
                 },
                 Token::FuncName((_, name)) => {
                     let mut is_declare = false;
+                    let mut is_calling = false;
+                    let mut parameters = String::new();
 
                     match &line[i-1] {
                         Token::Function(_) => is_declare = true,
@@ -165,59 +170,45 @@ pub fn parser(tokens: Vec<Token>) -> Vec<Parsed> {
                     }
 
                     if !is_declare {
-                        match &line[i+1] {
-                            Token::LParen(_) => parsed_lines.push(Parsed::FunctionCall(name.to_owned())),
-                            _ => (),
+                        let mut j = i + 1;
+                        while j < line.len() {
+                            match &line[j] {
+                                Token::LParen(_) => {
+                                    is_calling = true;
+                                },
+                                Token::Parameters((_, value)) => parameters.push_str(value),
+                                _ => (),
+                            }
+
+                            j += 1;
                         }
+
+                        if is_calling {
+                            parsed_lines.push(Parsed::FunctionCall(FunctionCall {
+                                name: name.to_owned(),
+                                parameters,
+                            }));
+                        }
+                        i = j;
                     }
                 },
                 Token::Print(_) => {
                     let mut body = String::new();
-                    let mut parameters = String::new();
-                    let mut is_parameters = false;
-                    let mut is_closed = false;
                     let mut j = i + 1;
 
                     while j < line.len() {
                         match &line[j] {
-                            Token::Strings((_, value)) => body.push_str(value),
-                            Token::Semicolon(_) => {
-                                match &line[j-1] {
-                                    Token::RParen(_) => is_closed = true,
-                                    _ => (),
-                                }
-                            },
-                            Token::Comma((_, value)) => {
-                                if !is_parameters {
-                                    is_parameters = true;
-                                } else {
-                                    parameters.push_str(value);
-                                }
-                            },
-                            Token::VarName((_, name)) | Token::Plus((_, name)) |
-                            Token::Minus((_, name)) | Token::Multiply((_, name)) | Token::Divide((_, name)) |
-                            Token::LParen((_, name)) | Token::RParen((_, name)) => {
-                                if is_parameters && !is_closed {
-                                    parameters.push_str(name);
-                                }
-                            },
-                            Token::Number((_, name)) => {
-                                if is_parameters && !is_closed {
-                                    parameters.push_str(&name.to_string());
-                                }
-                            }
+                            Token::Parameters((_, value)) => body.push_str(value),
                             _ => (),
                         }
 
                         j += 1;
                     }
 
-                    parsed_lines.push(Parsed::Print(Print {
-                        body,
-                        parameters,
-                    }));
+                    parsed_lines.push(Parsed::Print(body));
                 },
                 Token::NewLine(_) => (),
+                Token::Parameters(_) => (),
             }
 
             i += 1;

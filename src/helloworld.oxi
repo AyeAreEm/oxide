@@ -1,10 +1,7 @@
-proc helloworld() {
-    string h = "hello world";
-    print("{}", h);
+proc square(string x) {
+    print("{}", x);
 }
 
 proc main() {
-    int x = 3 + 4;
-    print("{}", x-1);
-    helloworld();
+    square("hello"); // problem with passing int parameters
 }
