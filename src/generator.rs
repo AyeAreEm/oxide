@@ -12,6 +12,8 @@ pub fn generator(parsed: Vec<Parsed>) -> String {
                     to_rust = format!("let {name}: {type_class} = String::from(\"{value}\");\n");
                 } else if type_class == String::from("i32") {
                     to_rust = format!("let {name}: {type_class} = {value};\n");
+                } else if type_class == String::from("bool") {
+                    to_rust = format!("let {name}: {type_class} = {value};")
                 }
 
                 gen.push_str(&to_rust);

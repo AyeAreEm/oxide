@@ -6,7 +6,7 @@ use generator::generator;
 mod parser;
 mod generator;
 
-// add booleans, comments, if statements, while / for loops, function parameters, maybe more ints, return values, arrays & vectors, mut
+// comments, if statements, while / for loops, function parameters, maybe more ints, return values, arrays & vectors, mut
 #[derive(Debug, Clone)]
 pub enum Token {
     Plus((String, String)),
@@ -23,8 +23,10 @@ pub enum Token {
     Equality((String, String)),
     Number((String, i32)),
     Strings((String, String)),
+    Boolean((String, bool)),
     LetInt((String, String)),
     LetString((String, String)),
+    LetBool((String, String)),
     VarName((String, String)),
     Semicolon((String, String)),
     Comma((String, String)),
@@ -32,12 +34,26 @@ pub enum Token {
     FuncName((String, String)),
     Print((String, String)),
     Parameters((String, String)),
-    // WhiteSpace((String, String)),
     NewLine((String, String)),
+    Comment((String, String)),
+    // WhiteSpace((String, String)),
 }
 
-fn handle_ending_value(tokens: &mut Vec<Token>, current_token: &mut String, making_string: &mut i8, making_params: &mut i8) {
+fn handle_ending_value(tokens: &mut Vec<Token>, current_token: &mut String, making_string: &mut i8, making_params: &mut i8, making_comment: &mut bool) {
     if current_token.is_empty() {
+        return;
+    }
+
+    if *making_comment == true {
+        tokens.push(Token::Comment((String::from("COMMENT"), current_token.to_owned())));
+        *making_comment = false;
+        current_token.clear();
+        return;
+    }
+
+    if *making_params >= 1 {
+        tokens.push(Token::Parameters((String::from("PARAMETERS"), current_token.to_string()))); 
+        current_token.clear();
         return;
     }
 
@@ -59,21 +75,23 @@ fn handle_ending_value(tokens: &mut Vec<Token>, current_token: &mut String, maki
             }
         },
         Err(_) => {
-            if current_token == "=" && *making_params < 1 {
+            if current_token == "=" {
                 tokens.push(Token::EqualsTo((String::from("EQUALSTO"), current_token.to_string())))
-            } else if current_token == "==" && *making_params < 1 {
+            } else if current_token == "==" {
                 tokens.push(Token::Equality((String::from("EQUALITY"), current_token.to_string())))
-            } else if current_token == "int" && *making_params < 1 {
+            } else if current_token == "int" {
                 tokens.push(Token::LetInt((String::from("LETINT"), current_token.to_string())))
-            } else if current_token == "string" && *making_params < 1 {
-                tokens.push(Token::LetString((String::from("LETSTRING"), current_token.to_string())))
-            } else if current_token == "proc" && *making_params < 1 {
+            } else if current_token == "string" {
+                tokens.push(Token::LetString((String::from("LetString"), current_token.to_string())))
+            } else if current_token == "bool" {
+                tokens.push(Token::LetBool((String::from("LetBool"), current_token.to_string())))
+            } else if current_token == "proc" {
                 tokens.push(Token::Function((String::from("FUNCTION"), current_token.to_string())))
-            } else if current_token == "print" && *making_params < 1 {
+            } else if current_token == "print" {
                 tokens.push(Token::Print((String::from("PRINT"), current_token.to_string())))
             } else {
                 match tokens.last().unwrap() {
-                    Token::LetInt(_) | Token::LetString(_) => tokens.push(Token::VarName((String::from("VARNAME"), current_token.to_string()))),
+                    Token::LetInt(_) | Token::LetString(_) | Token::LetBool(_) => tokens.push(Token::VarName((String::from("VARNAME"), current_token.to_string()))),
                     Token::Function(_) => tokens.push(Token::FuncName((String::from("FUNCNAME"), current_token.to_string()))),
                     Token::LParen(_) => {
                         tokens.push(Token::Parameters((String::from("PARAMETERS"), current_token.to_string())));
@@ -87,6 +105,17 @@ fn handle_ending_value(tokens: &mut Vec<Token>, current_token: &mut String, maki
                         }
                     },
                     _ => {
+                        if current_token.to_owned() == String::from("true") || current_token.to_owned() == String::from("false") {
+                            match current_token.as_str() {
+                                "true" => tokens.push(Token::Boolean((String::from("BOOLEAN"), true))),
+                                "false" => tokens.push(Token::Boolean((String::from("BOOLEAN"), false))),
+                                _ => panic!("that shouldn't have happened")
+                            }
+
+                            current_token.clear();
+                            return;
+                        }
+
                         let mut found = false;
 
                         for (type_class, value) in named {
@@ -116,35 +145,44 @@ fn tokeniser(content: String) -> Vec<Token> {
     let mut current_token = String::new();
     let mut making_string: i8 = 0;
     let mut making_params: i8 = 0;
+    let mut making_comment: bool = false;
 
-    // fix singel quotes
+
+    // fix single quotes
     for c in content.chars() {
-        println!("running");
-        if c.is_digit(10) || c.is_alphabetic() || (making_string > 0 && (c != '"' || c == ' ')) || (making_params >= 1 && c != ')' && c != '(') || (making_params >= 1 && c == ' ') {
+        if making_comment {
+            match c {
+                '\n' => {
+                    handle_ending_value(&mut tokens, &mut current_token, &mut making_string, &mut making_params, &mut making_comment);
+                    tokens.push(Token::NewLine((String::from("NEWLINE"), String::from(c))));
+                },
+                _ => current_token.push(c),
+            }
+        } else if c.is_digit(10) || c.is_alphabetic() || (making_string > 0 && (c != '"' || c == ' ')) || (making_params >= 1 && c != ')' && c != '(') || (making_params >= 1 && c == ' ') {
             current_token.push(c);
         } else if c == '+' {
-            handle_ending_value(&mut tokens, &mut current_token, &mut making_string, &mut making_params);
+            handle_ending_value(&mut tokens, &mut current_token, &mut making_string, &mut making_params, &mut making_comment);
             tokens.push(Token::Plus((String::from("PLUS"), String::from(c))));
         } else if c == '-' {
-            handle_ending_value(&mut tokens, &mut current_token, &mut making_string, &mut making_params);
+            handle_ending_value(&mut tokens, &mut current_token, &mut making_string, &mut making_params, &mut making_comment);
             tokens.push(Token::Minus((String::from("MINUS"), String::from(c))));
         } else if c == '*' {
-            handle_ending_value(&mut tokens, &mut current_token, &mut making_string, &mut making_params);
+            handle_ending_value(&mut tokens, &mut current_token, &mut making_string, &mut making_params, &mut making_comment);
             tokens.push(Token::Multiply((String::from("MULTIPLY"), String::from(c))));
         } else if c == '/' {
-            handle_ending_value(&mut tokens, &mut current_token, &mut making_string, &mut making_params);
+            handle_ending_value(&mut tokens, &mut current_token, &mut making_string, &mut making_params, &mut making_comment);
             tokens.push(Token::Divide((String::from("DIVIDE"), String::from(c))));
         } else if c == '"' {
             making_string += 1;
-            handle_ending_value(&mut tokens, &mut current_token, &mut making_string, &mut making_params);
+            handle_ending_value(&mut tokens, &mut current_token, &mut making_string, &mut making_params, &mut making_comment);
             tokens.push(Token::DblQuote((String::from("DBLQUOTE"), String::from(c))));
         } else if c == '\'' {
-            handle_ending_value(&mut tokens, &mut current_token, &mut making_string, &mut making_params);
+            handle_ending_value(&mut tokens, &mut current_token, &mut making_string, &mut making_params, &mut making_comment);
             tokens.push(Token::SglQuote((String::from("SGLQUOTE"), String::from(c))));
         } else if c == '(' {
             match making_params {
                 0 => {
-                    handle_ending_value(&mut tokens, &mut current_token, &mut making_string, &mut making_params);
+                    handle_ending_value(&mut tokens, &mut current_token, &mut making_string, &mut making_params, &mut making_comment);
                     making_params += 1;
                     tokens.push(Token::LParen((String::from("LPAREN"), String::from(c))));
                 },
@@ -157,11 +195,11 @@ fn tokeniser(content: String) -> Vec<Token> {
         } else if c == ')' {
             match making_params {
                 0 => {
-                    handle_ending_value(&mut tokens, &mut current_token, &mut making_string, &mut making_params);
+                    handle_ending_value(&mut tokens, &mut current_token, &mut making_string, &mut making_params, &mut making_comment);
                     tokens.push(Token::RParen((String::from("RPAREN"), String::from(c))));
                 },
                 1 => {
-                    handle_ending_value(&mut tokens, &mut current_token, &mut making_string, &mut making_params);
+                    handle_ending_value(&mut tokens, &mut current_token, &mut making_string, &mut making_params, &mut making_comment);
                     making_params -= 1;
                     tokens.push(Token::RParen((String::from("RPAREN"), String::from(c))));
                 },
@@ -172,30 +210,33 @@ fn tokeniser(content: String) -> Vec<Token> {
                 
             }
         } else if c == '{' {
-            handle_ending_value(&mut tokens, &mut current_token, &mut making_string, &mut making_params);
+            handle_ending_value(&mut tokens, &mut current_token, &mut making_string, &mut making_params, &mut making_comment);
             tokens.push(Token::LSquirly((String::from("LSQUIRLY"), String::from(c))));
         } else if c == '}' {
-            handle_ending_value(&mut tokens, &mut current_token, &mut making_string, &mut making_params);
+            handle_ending_value(&mut tokens, &mut current_token, &mut making_string, &mut making_params, &mut making_comment);
             tokens.push(Token::RSquirly((String::from("RSQUIRLY"), String::from(c))));
         } else if c == ',' {
-            handle_ending_value(&mut tokens, &mut current_token, &mut making_string, &mut making_params);
+            handle_ending_value(&mut tokens, &mut current_token, &mut making_string, &mut making_params, &mut making_comment);
             tokens.push(Token::Comma((String::from("COMMA"), String::from(c))));
         } else if c == '\n' {
-            handle_ending_value(&mut tokens, &mut current_token, &mut making_string, &mut making_params);
+            handle_ending_value(&mut tokens, &mut current_token, &mut making_string, &mut making_params, &mut making_comment);
             tokens.push(Token::NewLine((String::from("NEWLINE"), String::from(c))));
         } else if c == ' ' {
             match making_params {
                 0 => {
-                    handle_ending_value(&mut tokens, &mut current_token, &mut making_string, &mut making_params);
+                    handle_ending_value(&mut tokens, &mut current_token, &mut making_string, &mut making_params, &mut making_comment);
                 },
                 _ => current_token.push(c),
             }
             // tokens.push(Token::WhiteSpace((String::from("WHITESPACE"), String::from(c))));
         } else if c == ';' {
-            handle_ending_value(&mut tokens, &mut current_token, &mut making_string, &mut making_params);
+            handle_ending_value(&mut tokens, &mut current_token, &mut making_string, &mut making_params, &mut making_comment);
             tokens.push(Token::Semicolon((String::from("SEMICOLON"), String::from(c))))
         } else if c == '=' {
             current_token.push(c);
+        } else if c == '#' {
+            current_token.push(c);
+            making_comment = true;
         } else {
             current_token.push(c);
         }

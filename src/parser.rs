@@ -65,6 +65,7 @@ pub fn parser(tokens: Vec<Token>) -> Vec<Parsed> {
                 Token::Equality(_) => (),
                 Token::Number(_) => (),
                 Token::Strings(_) => (),
+                Token::Boolean(_) => (),
                 Token::LetInt(_) => {
                     let mut name = String::new();
                     let mut value = String::new();
@@ -131,6 +132,40 @@ pub fn parser(tokens: Vec<Token>) -> Vec<Parsed> {
                         }));
                         
                         i = j;
+                    } else {
+                        panic!("invalid syntax");
+                    }
+                },
+                Token::LetBool(_) => {
+                    let mut name = String::new();
+                    let mut value = String::new();
+                    let mut is_assigned = false; 
+                    let mut j = i + 1;
+
+                    while j < line.len() {
+                        match &line[j] {
+                            Token::VarName((_, var_name)) => name = var_name.to_owned(),
+                            Token::EqualsTo(_) => is_assigned = true,
+                            Token::Boolean((_, v)) => {
+                                match v {
+                                    true => value = String::from("true"),
+                                    false => value = String::from("false"),
+                                }
+                            },
+                            _ => (),
+                        }
+
+                        j += 1;
+                    }
+
+                    if is_assigned {
+                        parsed_lines.push(Parsed::VariableDeclare(VariableDeclare {
+                            type_class: String::from("bool"),
+                            name,
+                            value
+                        }));
+
+                        i = j
                     } else {
                         panic!("invalid syntax");
                     }
@@ -209,6 +244,7 @@ pub fn parser(tokens: Vec<Token>) -> Vec<Parsed> {
                 },
                 Token::NewLine(_) => (),
                 Token::Parameters(_) => (),
+                Token::Comment(_) => (),
             }
 
             i += 1;

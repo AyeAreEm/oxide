@@ -1,7 +1,6 @@
-proc square(int x) {
-    print("{}", x * x);
-}
+proc main() int {
+    # added comments and booleans
 
-proc main() {
-    square(10);
+    bool is_thing = false;
+    print("its a thing?: {}", is_thing);
 }
