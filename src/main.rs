@@ -6,7 +6,7 @@ use generator::generator;
 mod parser;
 mod generator;
 
-// comments, if statements, while / for loops, function parameters, maybe more ints, return values, arrays & vectors, mut
+// if statements, while / for loops, function parameters, maybe more ints, return values, arrays & vectors, mut
 #[derive(Debug, Clone)]
 pub enum Token {
     Plus((String, String)),
