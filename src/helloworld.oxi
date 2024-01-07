@@ -1,7 +1,7 @@
-proc square(string x) {
-    print("{}", x);
+proc square(int x) {
+    print("{}", x * x);
 }
 
 proc main() {
-    square("hello"); // problem with passing int parameters
+    square(10);
 }

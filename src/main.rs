@@ -8,7 +8,7 @@ mod generator;
 
 // add booleans, comments, if statements, while / for loops, function parameters, maybe more ints, return values, arrays & vectors, mut
 #[derive(Debug, Clone)]
-enum Token {
+pub enum Token {
     Plus((String, String)),
     Minus((String, String)),
     Multiply((String, String)),
@@ -52,8 +52,11 @@ fn handle_ending_value(tokens: &mut Vec<Token>, current_token: &mut String, maki
     let new_token_result = current_token.parse::<i32>();
     match new_token_result {
         Ok(new_token) => {
-            // do logic to check if the number is a parameter, if so Token::Parameter, else Token::Number
-            tokens.push(Token::Number((String::from("NUMBER"), new_token)));
+            if *making_params >= 1 {
+                tokens.push(Token::Parameters((String::from("PARAMETERS"), current_token.to_string())));
+            } else {
+                tokens.push(Token::Number((String::from("NUMBER"), new_token)));
+            }
         },
         Err(_) => {
             if current_token == "=" && *making_params < 1 {
@@ -73,7 +76,7 @@ fn handle_ending_value(tokens: &mut Vec<Token>, current_token: &mut String, maki
                     Token::LetInt(_) | Token::LetString(_) => tokens.push(Token::VarName((String::from("VARNAME"), current_token.to_string()))),
                     Token::Function(_) => tokens.push(Token::FuncName((String::from("FUNCNAME"), current_token.to_string()))),
                     Token::LParen(_) => {
-                        tokens.push(Token::Parameters((String::from("Parameters"), current_token.to_string())));
+                        tokens.push(Token::Parameters((String::from("PARAMETERS"), current_token.to_string())));
                     },
                     Token::DblQuote(_) => {
                         if *making_string == 1 {
@@ -116,6 +119,7 @@ fn tokeniser(content: String) -> Vec<Token> {
 
     // fix singel quotes
     for c in content.chars() {
+        println!("running");
         if c.is_digit(10) || c.is_alphabetic() || (making_string > 0 && (c != '"' || c == ' ')) || (making_params >= 1 && c != ')' && c != '(') || (making_params >= 1 && c == ' ') {
             current_token.push(c);
         } else if c == '+' {
