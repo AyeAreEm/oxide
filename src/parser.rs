@@ -7,6 +7,9 @@ pub enum Parsed {
     FunctionCall(FunctionCall),
     Print(String),
     RSquirly(String),
+    If(String),
+    OrIf(String),
+    Else,
 }
 
 #[derive(Debug)]
@@ -20,6 +23,30 @@ pub struct VariableDeclare {
 pub struct FunctionDeclare {
     pub name: String,
     pub parameters: String, 
+}
+
+impl FunctionDeclare {
+    pub fn sanitise_params(&self, content_change: Vec<(String, String)>) -> String {
+        let seperated: Vec<_> = self.parameters.split(',').collect();
+        let mut re_params = String::new();
+
+        for elem in seperated {
+            for (from, to) in &content_change {
+                if elem.trim().contains(*&from) {
+                    let new: Vec<&str> = elem.trim().split(*&from).collect();
+                    let new_param = if re_params.is_empty() {
+                        format!("{}: {}", new[1], to)
+                    } else {
+                        format!(", {}: {}", new[1], to)
+                    };
+
+                    re_params.push_str(&new_param);
+                }
+            }
+        }
+
+        return re_params;
+    }
 }
 
 #[derive(Debug)]
@@ -68,6 +95,7 @@ pub fn parser(tokens: Vec<Token>) -> Vec<Parsed> {
                 Token::Boolean(_) => (),
                 Token::LetInt(_) => {
                     let mut name = String::new();
+                    let mut found_first_name = false;
                     let mut value = String::new();
                     let mut is_assigned = false;
                     let mut is_semicoloned = false;
@@ -75,7 +103,14 @@ pub fn parser(tokens: Vec<Token>) -> Vec<Parsed> {
 
                     while j < line.len() {
                         match &line[j] {
-                            Token::VarName((_, var_name)) => name = var_name.to_owned(),
+                            Token::VarName((_, var_name)) => {
+                                if !found_first_name {
+                                    name = var_name.to_owned();
+                                    found_first_name = true;
+                                } else {
+                                    value.push_str(var_name);
+                                }
+                            },
                             Token::EqualsTo(_) => is_assigned = true,
                             Token::Semicolon(_) => is_semicoloned = true,
                             Token::Number((_, num)) => {
@@ -109,13 +144,21 @@ pub fn parser(tokens: Vec<Token>) -> Vec<Parsed> {
                 },
                 Token::LetString(_) => {
                     let mut name = String::new();
+                    let mut found_first_name = false;
                     let mut value = String::new();
                     let mut is_assigned = false;
                     let mut j = i + 1;
 
                     while j < line.len() {
                         match &line[j] {
-                            Token::VarName((_, var_name)) => name = var_name.to_owned(),
+                            Token::VarName((_, var_name)) => {
+                                if !found_first_name {
+                                    name = var_name.to_owned();
+                                    found_first_name = true;
+                                } else {
+                                    value.push_str(var_name);
+                                }
+                            },
                             Token::EqualsTo(_) => is_assigned = true,
                             Token::Strings((_, v)) => value = v.to_owned(),
                             _ => (),
@@ -138,14 +181,27 @@ pub fn parser(tokens: Vec<Token>) -> Vec<Parsed> {
                 },
                 Token::LetBool(_) => {
                     let mut name = String::new();
+                    let mut found_first_name = false;
                     let mut value = String::new();
-                    let mut is_assigned = false; 
+                    let mut is_assigned = false;
                     let mut j = i + 1;
 
                     while j < line.len() {
                         match &line[j] {
-                            Token::VarName((_, var_name)) => name = var_name.to_owned(),
+                            Token::VarName((_, var_name)) => {
+                                if !found_first_name {
+                                    name = var_name.to_owned();
+                                    found_first_name = true;
+                                } else {
+                                    value.push_str(var_name);
+                                }
+                            },
                             Token::EqualsTo(_) => is_assigned = true,
+                            Token::Equality(_) => {
+                                if is_assigned {
+                                    value.push_str("==");
+                                }
+                            },
                             Token::Boolean((_, v)) => {
                                 match v {
                                     true => value = String::from("true"),
@@ -223,6 +279,8 @@ pub fn parser(tokens: Vec<Token>) -> Vec<Parsed> {
                                 name: name.to_owned(),
                                 parameters,
                             }));
+                        } else {
+                            panic!("invalid syntax");
                         }
                         i = j;
                     }
@@ -245,6 +303,50 @@ pub fn parser(tokens: Vec<Token>) -> Vec<Parsed> {
                 Token::NewLine(_) => (),
                 Token::Parameters(_) => (),
                 Token::Comment(_) => (),
+                Token::If(_) => {
+                    let mut is_opened = false;
+                    let mut parameter = String::new();
+                    let mut j = i + 1;
+
+                    while j < line.len() {
+                        match &line[j] {
+                            Token::Parameters((_, value)) => parameter.push_str(value),
+                            Token::LSquirly(_) => is_opened = true,
+                            _ => (),
+                        }
+                        j += 1;
+                    }
+                    
+                    if is_opened {
+                        parsed_lines.push(Parsed::If(parameter));
+                    }
+
+                    i = j;
+                },
+                Token::OrIf(_) => {
+                    let mut is_opened = false;
+                    let mut parameter = String::new();
+                    let mut j = i + 1;
+
+                    while j < line.len() {
+                        match &line[j] {
+                            Token::Parameters((_, value)) => parameter.push_str(value),
+                            Token::LSquirly(_) => is_opened = true,
+                            _ => (),
+                        }
+                        j += 1;
+                    }
+                    
+                    if is_opened {
+                        parsed_lines.push(Parsed::OrIf(parameter));
+                    }
+
+                    i = j;
+                },
+                Token::Else(_) => parsed_lines.push(Parsed::Else),
+                Token::Vector(_) => (),
+                Token::LSquare(_) => (),
+                Token::RSquare(_) => (),
             }
 
             i += 1;

@@ -1,6 +1,7 @@
-proc main() int {
-    # added comments and booleans
+proc say(int x) {
+    print("{}", x);
+}
 
-    bool is_thing = false;
-    print("its a thing?: {}", is_thing);
+proc main() {
+    say(20);
 }

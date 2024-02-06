@@ -1,4 +1,4 @@
-use crate::parser::{Parsed, FunctionDeclare, FunctionCall, VariableDeclare};
+use crate::parser::{Parsed, FunctionCall, VariableDeclare};
 
 pub fn generator(parsed: Vec<Parsed>) -> String {
     let mut gen = String::new();
@@ -18,38 +18,40 @@ pub fn generator(parsed: Vec<Parsed>) -> String {
 
                 gen.push_str(&to_rust);
             },
-            Parsed::FunctionDeclare(FunctionDeclare { name, parameters }) => {
-                let seperated: Vec<&str> = parameters.split(',').collect();
-                let mut re_params = String::new();
+            Parsed::FunctionDeclare(declare) => {
+                let content_change = vec![
+                    (String::from("string"), String::from("String")),
+                    (String::from("int"), String::from("i32")),
+                    (String::from("bool"), String::from("bool")),
+                ];
 
-                for elem in seperated {
-                    if elem.trim().contains("string") {
-                        let new: Vec<&str> = elem.trim().split("string").collect();
-                        let new_param = if re_params.is_empty() {
-                            format!("{}: {}", new[1], "String")
-                        } else {
-                            format!(", {}: {}", new[1], "String")
-                        };
+                let re_params = declare.sanitise_params(content_change);
 
-                        re_params.push_str(&new_param);
-                    } else if elem.trim().contains("int") {
-                        let new: Vec<&str> = elem.trim().split("int").collect();
-                        let new_param = if re_params.is_empty() {
-                            format!("{}: {}", new[1], "i32")
-                        } else {
-                            format!(", {}: {}", new[1], "i32")
-                        };
-
-                        re_params.push_str(&new_param);
-
-                    }
-                }
-
-                let to_rust = format!("fn {name}({re_params}) {{");
+                let to_rust = format!("fn {}({re_params}) {{", declare.name);
                 gen.push_str(&to_rust);
             },
             Parsed::FunctionCall(FunctionCall { name, parameters }) => {
-                let to_rust = format!("{name}({parameters});");
+                let mut output = String::new();
+                let mut inside_quotes = false;
+                let mut word_start = 0;
+
+                for (i, c) in parameters.char_indices() {
+                    if c == '"' {
+                        inside_quotes = !inside_quotes;
+                        if inside_quotes {
+                            output.push_str("String::from(\"");
+                            word_start = i + 1;
+                        } else {
+                            let word = &parameters[word_start..i];
+                            output.push_str(word);
+                            output.push_str("\")");
+                        }
+                    } else if !inside_quotes {
+                        output.push(c);
+                    }
+                }
+
+                let to_rust = format!("{name}({output});");
                 gen.push_str(&to_rust);
             },
             Parsed::Print(body) => {
@@ -57,6 +59,18 @@ pub fn generator(parsed: Vec<Parsed>) -> String {
                 gen.push_str(&to_rust);
             },
             Parsed::RSquirly(_) => gen.push_str("}"),
+            Parsed::If(body) => {
+                let to_rust = format!("if {body} {{");
+                gen.push_str(&to_rust);
+            },
+            Parsed::OrIf(body) => {
+                let to_rust = format!("else if {body} {{");
+                gen.push_str(&to_rust);
+            },
+            Parsed::Else => {
+                let to_rust = format!("else {{");
+                gen.push_str(&to_rust);
+            },
         }
     }
 

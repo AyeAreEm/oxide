@@ -6,7 +6,9 @@ use generator::generator;
 mod parser;
 mod generator;
 
-// if statements, while / for loops, function parameters, maybe more ints, return values, arrays & vectors, mut
+// while / for loops, maybe more ints, return values, vectors, mut
+//
+
 #[derive(Debug, Clone)]
 pub enum Token {
     Plus((String, String)),
@@ -15,10 +17,12 @@ pub enum Token {
     Divide((String, String)),
     LParen((String, String)),
     RParen((String, String)),
-    SglQuote((String, String)),
-    DblQuote((String, String)),
+    LSquare((String, String)),
+    RSquare((String, String)),
     LSquirly((String, String)),
     RSquirly((String, String)),
+    SglQuote((String, String)),
+    DblQuote((String, String)),
     EqualsTo((String, String)),
     Equality((String, String)),
     Number((String, i32)),
@@ -36,7 +40,29 @@ pub enum Token {
     Parameters((String, String)),
     NewLine((String, String)),
     Comment((String, String)),
-    // WhiteSpace((String, String)),
+    If((String, String)),
+    OrIf((String, String)),
+    Else((String, String)),
+    Vector((String, Vec<Token>)),
+}
+
+impl Token {
+    fn validate_vector(tokens: Vec<Token>) -> Option<Vec<Token>> {
+        let allowed_tokens: Vec<Token> = tokens.clone().into_iter()
+            .filter(|token| {
+                matches!(
+                    token,
+                    Token::Boolean(_) | Token::Strings(_) | Token::Number(_)
+                )
+            })
+            .collect();
+
+        if allowed_tokens.len() == tokens.len() {
+            return Some(allowed_tokens);
+        } else {
+            return None;
+        }
+    }
 }
 
 fn handle_ending_value(tokens: &mut Vec<Token>, current_token: &mut String, making_string: &mut i8, making_params: &mut i8, making_comment: &mut bool) {
@@ -58,6 +84,8 @@ fn handle_ending_value(tokens: &mut Vec<Token>, current_token: &mut String, maki
     }
 
     let mut named = Vec::new();
+    // let finding_names_token = tokens;
+
     for token in tokens.clone() {
         match token {
             Token::VarName(name) | Token::FuncName(name) => named.push(name),
@@ -89,6 +117,12 @@ fn handle_ending_value(tokens: &mut Vec<Token>, current_token: &mut String, maki
                 tokens.push(Token::Function((String::from("FUNCTION"), current_token.to_string())))
             } else if current_token == "print" {
                 tokens.push(Token::Print((String::from("PRINT"), current_token.to_string())))
+            } else if current_token == "if" {
+                tokens.push(Token::If((String::from("IF"), current_token.to_string())))
+            } else if current_token == "orif" {
+                tokens.push(Token::OrIf((String::from("ORIF"), current_token.to_string())))
+            } else if current_token == "else" {
+                tokens.push(Token::Else((String::from("ELSE"), current_token.to_string())))
             } else {
                 match tokens.last().unwrap() {
                     Token::LetInt(_) | Token::LetString(_) | Token::LetBool(_) => tokens.push(Token::VarName((String::from("VARNAME"), current_token.to_string()))),
@@ -145,8 +179,8 @@ fn tokeniser(content: String) -> Vec<Token> {
     let mut current_token = String::new();
     let mut making_string: i8 = 0;
     let mut making_params: i8 = 0;
+    let mut making_square_params: i8 = 0;
     let mut making_comment: bool = false;
-
 
     // fix single quotes
     for c in content.chars() {
@@ -215,6 +249,12 @@ fn tokeniser(content: String) -> Vec<Token> {
         } else if c == '}' {
             handle_ending_value(&mut tokens, &mut current_token, &mut making_string, &mut making_params, &mut making_comment);
             tokens.push(Token::RSquirly((String::from("RSQUIRLY"), String::from(c))));
+        } else if c == '[' {
+            handle_ending_value(&mut tokens, &mut current_token, &mut making_string, &mut making_params, &mut making_comment);
+            tokens.push(Token::LSquare((String::from("LSQUARE"), String::from(c))));
+        } else if c == ']' {
+            handle_ending_value(&mut tokens, &mut current_token, &mut making_string, &mut making_params, &mut making_comment);
+            tokens.push(Token::RSquare((String::from("RSQUARE"), String::from(c))));
         } else if c == ',' {
             handle_ending_value(&mut tokens, &mut current_token, &mut making_string, &mut making_params, &mut making_comment);
             tokens.push(Token::Comma((String::from("COMMA"), String::from(c))));
