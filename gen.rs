@@ -1,1 +1,0 @@
-fn say( x: i32) {println!("{}", x);}fn main() {say(20);}
